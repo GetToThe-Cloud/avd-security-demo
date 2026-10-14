@@ -1,0 +1,8 @@
+// Who connected, to which host, from where, over which transport           operations view
+// Used live in the demo (step 8). Run in the workspace that receives the host pool diagnostics.
+WVDConnections
+| where TimeGenerated > ago(2h)
+| where State == "Connected"
+| project TimeGenerated, UserName, SessionHostName, ClientOS, ClientType, ClientSideIPAddress,
+          TransportType, IsClientPrivateLink, IsSessionHostPrivateLink, CorrelationId
+| order by TimeGenerated desc

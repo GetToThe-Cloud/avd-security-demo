@@ -1,0 +1,16 @@
+// Successful AVD sign-in from a country this user has not used before       chain step 2
+// Template from Part III. Your users connect from a predictable set of places, so this is
+// a high-quality signal. Tune Lookback and Recent to your environment.
+let Lookback = 30d;
+let Recent = 1d;
+let AvdIds = dynamic(["9cdead84-a844-4324-93f2-b2e6bb768d07", "270efc09-cd0d-444b-a71f-39af4910ec45"]);
+let Known = SigninLogs
+    | where TimeGenerated between (ago(Lookback) .. ago(Recent))
+    | where ResultType == "0" and (AppId in (AvdIds) or ResourceIdentity in (AvdIds))
+    | summarize by UserPrincipalName, Country = tostring(LocationDetails.countryOrRegion);
+SigninLogs
+| where TimeGenerated > ago(Recent)
+| where ResultType == "0" and (AppId in (AvdIds) or ResourceIdentity in (AvdIds))
+| extend Country = tostring(LocationDetails.countryOrRegion)
+| join kind=leftanti Known on UserPrincipalName, Country
+| project TimeGenerated, UserPrincipalName, Country, IPAddress, AppDisplayName, ResourceDisplayName

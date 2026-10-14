@@ -1,0 +1,11 @@
+// Mass FSLogix profile failures: alert on the rate, not the event            chain step 5
+// Template from Part III. A handful of failures is a normal Monday; a spike across many
+// users means a broken storage path or something encrypting the containers.
+// Needs: the FSLogix Operational event log (Microsoft-FSLogix-Apps/Operational) collected
+//        through a data collection rule. Tune the threshold to your estate.
+Event
+| where TimeGenerated > ago(1h)
+| where Source startswith "Microsoft-FSLogix-Apps" and EventLevelName == "Error"
+| summarize Errors = count(), Hosts = dcount(Computer) by bin(TimeGenerated, 5m)
+| where Errors >= 10
+| order by TimeGenerated desc

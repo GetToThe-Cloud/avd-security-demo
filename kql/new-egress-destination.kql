@@ -1,0 +1,15 @@
+// A sessionhost reaching for a destination none of its siblings used         chain step 6
+// Template from Part III. Once egress is tuned, the firewall becomes a detection surface.
+// Needs: Azure Firewall resource-specific logs (AZFWApplicationRule).
+// Set SessionHostRanges to your sessionhost subnet(s).
+let SessionHostRanges = dynamic(["10.10.1.0/24"]);
+let Baseline = AZFWApplicationRule
+    | where TimeGenerated between (ago(14d) .. ago(1d))
+    | where ipv4_is_in_any_range(SourceIp, SessionHostRanges)
+    | distinct Fqdn;
+AZFWApplicationRule
+| where TimeGenerated > ago(1d)
+| where ipv4_is_in_any_range(SourceIp, SessionHostRanges)
+| where Fqdn !in (Baseline)
+| summarize Attempts = count(), Hosts = dcount(SourceIp), Actions = make_set(Action), FirstSeen = min(TimeGenerated) by Fqdn
+| order by Attempts desc

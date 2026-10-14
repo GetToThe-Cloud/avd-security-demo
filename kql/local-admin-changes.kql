@@ -1,0 +1,24 @@
+// Local Administrators group changes                                      chain step 4
+// The first detection to build after the demo: highest signal, lowest noise.
+// Run in: Microsoft Defender portal > Hunting > Advanced hunting
+// Needs:  Defender for Endpoint on the sessionhosts, and the audit policy
+//         "Audit Security Group Management" (Success) on the hosts.
+DeviceEvents
+| where Timestamp > ago(1d)
+| where ActionType in ("UserAccountCreated", "UserAccountAddedToLocalGroup")
+| extend Fields = parse_json(AdditionalFields)
+| extend GroupName = tostring(Fields.GroupName), GroupSid = tostring(Fields.GroupSid)
+| where ActionType == "UserAccountCreated" or GroupSid == "S-1-5-32-544" or GroupName =~ "Administrators"
+| project Timestamp, DeviceName, ActionType, AccountName, AccountSid, GroupName,
+          InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessCommandLine
+| order by Timestamp desc
+
+// The same signal from Windows Security events in Log Analytics or Sentinel
+// (Security events collected through a data collection rule):
+//
+// SecurityEvent
+// | where TimeGenerated > ago(1d)
+// | where EventID in (4720, 4732)     // 4720 user created, 4732 member added to a security-enabled local group
+// | where EventID == 4720 or TargetSid == "S-1-5-32-544"
+// | project TimeGenerated, Computer, EventID, Activity, TargetUserName, MemberName, MemberSid, SubjectUserName
+// | order by TimeGenerated desc
