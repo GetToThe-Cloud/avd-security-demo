@@ -1,2 +1,5 @@
 # Baseline RDP properties saved by Initialize-AvdDemo (per host pool)
 scripts/.demo-state/
+
+# Lab outputs written by scripts/01-Deploy-Environment.ps1 (subscription, resource group and user names)
+scripts/demo-environment.json

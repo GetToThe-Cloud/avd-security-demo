@@ -16,13 +16,21 @@
     Needs AvdSecurityDemo.psm1 in the same folder, PowerShell 7.2+ and the Az modules.
     Run Connect-AzAccount first.
 
+    After 01-Deploy-Environment.ps1 every parameter is optional: the lab's host pool and
+    demo users come from scripts/demo-environment.json.
+
 .EXAMPLE
+    # The lab built with 01-Deploy-Environment.ps1
+    ./Start-AvdDemo.ps1 -Watermark
+
+.EXAMPLE
+    # A host pool of your own
     ./Start-AvdDemo.ps1 -SubscriptionId <id> -ResourceGroupName rg-avd-demo -HostPoolName hp-avd-demo `
                         -PowerUserSignInName avd.poweruser@contoso.com
 
 .EXAMPLE
     # Read the whole run of show without touching Azure
-    ./Start-AvdDemo.ps1 -SubscriptionId x -ResourceGroupName x -HostPoolName x -PowerUserSignInName x -Preview
+    ./Start-AvdDemo.ps1 -Preview
 
 .EXAMPLE
     # Pick up again at step 6 after a hiccup
@@ -31,11 +39,11 @@
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'Console output for a presenter at a terminal, not objects for a pipeline')]
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][string]$SubscriptionId,
-    [Parameter(Mandatory)][string]$ResourceGroupName,
-    [Parameter(Mandatory)][string]$HostPoolName,
-    [Parameter(Mandatory)][string]$PowerUserSignInName,
-    [string]$UserSignInName = 'avd.user',
+    [string]$SubscriptionId,
+    [string]$ResourceGroupName,
+    [string]$HostPoolName,
+    [string]$PowerUserSignInName,
+    [string]$UserSignInName,
     [switch]$Watermark,
     [ValidateRange(1, 9)][int]$StartAt = 1,
     [switch]$SkipReset,
@@ -43,6 +51,25 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Fill in whatever was not passed from the lab built by 01-Deploy-Environment.ps1.
+$environmentFile = Join-Path $PSScriptRoot 'demo-environment.json'
+if (Test-Path -Path $environmentFile) {
+    $environment = Get-Content -Path $environmentFile -Raw | ConvertFrom-Json
+    if (-not $SubscriptionId)      { $SubscriptionId      = $environment.subscriptionId }
+    if (-not $ResourceGroupName)   { $ResourceGroupName   = $environment.resourceGroups.core }
+    if (-not $HostPoolName)        { $HostPoolName        = $environment.hostPool.name }
+    if (-not $PowerUserSignInName) { $PowerUserSignInName = $environment.users.powerUser }
+    if (-not $UserSignInName)      { $UserSignInName      = $environment.users.user }
+}
+if (-not $UserSignInName) { $UserSignInName = 'avd.user' }
+if ($Preview) {
+    if (-not $HostPoolName)        { $HostPoolName        = '<host pool>' }
+    if (-not $PowerUserSignInName) { $PowerUserSignInName = 'avd.poweruser@<tenant>' }
+}
+elseif (-not ($SubscriptionId -and $ResourceGroupName -and $HostPoolName -and $PowerUserSignInName)) {
+    throw 'Pass -SubscriptionId, -ResourceGroupName, -HostPoolName and -PowerUserSignInName, or deploy the lab with 01-Deploy-Environment.ps1 first.'
+}
 
 #region Presenter helpers ---------------------------------------------------------------
 
