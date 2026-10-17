@@ -6,7 +6,7 @@ Companion code for the [gettothe.cloud](https://www.gettothe.cloud) session *Azu
 
 The scripts change Azure on your behalf: the RDP properties of a host pool, Terminal Services policy values on the sessionhost (through Run Command), one role assignment and one policy assignment. Point them at a lab host pool, read them before you run them, and treat this as a demo, not a production pattern. `Reset-AvdDemo` puts the RDP properties and the host values back; the role and the policy are yours to keep or remove.
 
-This repository does not deploy the lab. It expects a host pool you already have, which keeps the demo about the settings rather than the deployment.
+Bring a host pool of your own, or build the lab from zero with the Bicep and the numbered scripts in this repository: two resource groups, one secured host pool and one sessionhost, ready in about half an hour.
 
 ## What the lab needs
 
@@ -21,6 +21,40 @@ This repository does not deploy the lab. It expects a host pool you already have
 
 Make sure nothing else manages the Terminal Services redirection values on the demo host. If Intune or Group Policy sets them, your changes come back at the next sync. That is a good story about two policy sources, but a bad live demo.
 
+## Build the lab from zero
+
+`bicep/main.bicep` builds exactly the lab above, split over two resource groups so every control lands where the talk says it belongs.
+
+| Resource group | What | Why it's there |
+| --- | --- | --- |
+| `rg-avdsec-core` | Virtual network with a private subnet, an NSG without inbound rules, a NAT gateway | Reverse connect: nothing dials in, the host dials out through the NAT gateway |
+| `rg-avdsec-core` | Log Analytics workspace, diagnostics on the host pool, application group and workspace | Flip 4, and the `kql` folder |
+| `rg-avdsec-core` | Pooled host pool `vdpool-avdsec` with the secured baseline RDP properties, a desktop application group, the workspace | The control plane objects you own |
+| `rg-avdsec-hosts` | One Windows 11 Enterprise multi-session VM: Trusted Launch with Secure Boot, vTPM and Guest Attestation, joined to Entra ID, no public IP | The sessionhost the demo flips |
+| `rg-avdsec-hosts` | Virtual Machine User Login for both demo users, and the Not allowed resource types policy denying public IPs | Roles and policy scoped to the sessionhosts, not the subscription |
+
+The NAT gateway's public IP sits in the core resource group on purpose: the deny policy only covers the hosts resource group, so the lab never blocks itself.
+
+You need two existing Entra ID users, licensed for Azure Virtual Desktop, for `avd.user` and `avd.poweruser`. The scripts don't create accounts.
+
+```powershell
+cd scripts
+./00-Prerequisites.ps1 -SubscriptionId <subscription-id> -InstallMissingModules
+./00-Prerequisites.ps1 -SubscriptionId <subscription-id> -EnableEntraSso   # once per tenant, if SSO isn't on yet
+./01-Deploy-Environment.ps1 -SubscriptionId <subscription-id> -UserUpn avd.user@<tenant> -PowerUserUpn avd.poweruser@<tenant> -ConnectEntraSignInLogs
+./02-Test-Environment.ps1
+```
+
+`00-Prerequisites.ps1` checks the modules and the Bicep CLI, registers the resource providers, and checks that the region, the VM size (Gen2 with Trusted Launch), the image and your vCPU quota work. With `-EnableEntraSso` it switches on Microsoft Entra authentication for RDP on the Windows Cloud Login service principal, which the host pool's `enablerdsaadauth:i:1` needs.
+
+`01-Deploy-Environment.ps1` deploys `main.bicep` twice. The `core` phase builds everything except the VM. The script then creates a registration token that is valid for two hours, and the `sessionhost` phase adds the VM, which joins Entra ID and installs the AVD agent and boot loader. The registration script checks that both installers carry a valid Microsoft signature before it runs them. The script waits until the host is Available, restarts it once as Microsoft's registration steps say, and then removes the registration token: it's a credential that lets any machine join the pool. Finally it gives `avd.poweruser` Virtual Machine Administrator Login, the misconfiguration flip 1 removes on stage, and writes everything to `scripts/demo-environment.json`. Count on 20 to 30 minutes.
+
+`-ConnectEntraSignInLogs` sends the tenant's Entra ID sign-in logs to the lab's workspace, which `kql/avd-signins.kql` needs. It's a tenant-wide diagnostic setting, so it needs a Security Administrator or Global Administrator and Entra ID P1 or P2. Leave it out if your sign-in logs already go to a workspace you can query.
+
+`02-Test-Environment.ps1` is the go/no-go check: host Available, roles and the flip 1 misconfiguration in place, the policy at least 30 minutes old, the RDP properties at the baseline, data arriving in Log Analytics. It ends with `Show-AvdDemoState`.
+
+Once the lab exists, `Initialize-AvdDemo` and `Start-AvdDemo.ps1` need no parameters: they read `scripts/demo-environment.json`.
+
 ## Before you start
 
 You need PowerShell 7.2 or later with Az.Accounts, Az.DesktopVirtualization, Az.Compute, Az.Network and Az.Resources. Az.Monitor is optional and only used for the diagnostic settings check.
@@ -31,6 +65,7 @@ The account you run it with needs to change RDP properties (Desktop Virtualizati
 Connect-AzAccount
 cd scripts
 Import-Module ./AvdSecurityDemo.psm1 -Force
+Initialize-AvdDemo   # the lab from 01-Deploy-Environment.ps1, or your own host pool:
 Initialize-AvdDemo -SubscriptionId <subscription-id> -ResourceGroupName rg-avd-demo -HostPoolName hp-avd-demo
 Show-AvdDemoState
 ```
@@ -38,6 +73,8 @@ Show-AvdDemoState
 `Initialize-AvdDemo` saves the host pool's current RDP properties to `scripts/.demo-state/` the first time it runs. That file is the baseline `Reset-AvdDemo` restores, so run it for the first time while the host pool is in its secured state.
 
 ## The day before
+
+Built the lab with `01-Deploy-Environment.ps1`? Then the policy and the poweruser's role are already in place; run `./02-Test-Environment.ps1`. On a host pool of your own:
 
 ```powershell
 New-AvdDemoPublicIpPolicy
@@ -50,7 +87,7 @@ Both have a delay. A new policy assignment can take up to 30 minutes to start de
 
 | When | Do | Why |
 | --- | --- | --- |
-| T-60 min | `Reset-AvdDemo -Restart`, then `Show-AvdDemoState` | Everything green except the poweruser line, which is the first flip |
+| T-60 min | `Reset-AvdDemo -Restart`, then `./02-Test-Environment.ps1` (or `Show-AvdDemoState` on your own host pool) | Everything green except the poweruser line, which is the first flip |
 | T-30 min | Windows App signed in as `avd.user`, a browser InPrivate window with the web client as `avd.poweruser` | Two sessions side by side for flip 1 |
 | T-15 min | Notepad on the laptop with a line of text, `Q3-customer-list.txt` on the session desktop | Something to copy in both directions for flip 2 |
 | T-5 min | The command below with `-Preview` to read the run once more; open Log Analytics with the `kql` folder | Last look, then start for real |
@@ -97,7 +134,17 @@ Reset-AvdDemo -Restart                                       # RDP properties an
 Grant-AvdDemoAdminLogin -SignInName avd.poweruser@<tenant>   # the flip 1 misconfiguration, for the next run
 ```
 
-When you tear the lab down, remove the `deny-public-ip-sessionhosts` policy assignment and the poweruser's role assignment along with it.
+Done with the lab you built from zero?
+
+```powershell
+./99-Remove-Environment.ps1   # both resource groups, the sign-in log setting and the local state files
+```
+
+The sessionhost's device object stays in Microsoft Entra ID; the script tells you which one to delete. On a host pool of your own, remove the `deny-public-ip-sessionhosts` policy assignment and the poweruser's role assignment when you tear the lab down.
+
+## Cost
+
+Almost all of the cost is the sessionhost: one `Standard_D4ads_v5` with a Premium SSD OS disk while it runs. The NAT gateway and its public IP add a little per hour, and Log Analytics charges for what it ingests, which is small for one host and two users but grows if you connect a busy tenant's sign-in logs. Build the lab the day before, deallocate the VM between rehearsals if you like, and remove it after the talk.
 
 ## Things to know
 
@@ -115,6 +162,7 @@ Conditional Access for AVD covers two moments, and `kql/avd-signins.kql` shows b
 
 | Function | What it does | Changes Azure |
 | --- | --- | --- |
+| `Get-AvdDemoEnvironment` | Reads `scripts/demo-environment.json` from the lab deployment | No |
 | `Initialize-AvdDemo` | Sets the context and saves the baseline RDP properties once | No |
 | `Show-AvdDemoState` | One-screen posture check, every line mapped to a chain step | No |
 | `Grant-AvdDemoAdminLogin` | Prep: Virtual Machine Administrator Login for the test user | Yes |
@@ -130,7 +178,20 @@ Conditional Access for AVD covers two moments, and `kql/avd-signins.kql` shows b
 ## Files
 
 ```text
+bicep/
+  main.bicep                   subscription-scope entry point, phases core and sessionhost
+  modules/
+    network.bicep              VNet, private subnet, NSG without inbound rules, NAT gateway
+    monitoring.bicep           Log Analytics workspace
+    avd.bicep                  host pool with the baseline RDP properties, desktop, workspace, diagnostics
+    hosts-governance.bicep     VM User Login roles and the deny-public-IP policy on the hosts resource group
+    sessionhost.bicep          Trusted Launch VM, Guest Attestation, Entra join, AVD agent
+    Register-AvdAgent.ps1      downloads, signature-checks and installs the agent and boot loader
 scripts/
+  00-Prerequisites.ps1         modules, Bicep, providers, region, VM size, image, quota, Entra SSO
+  01-Deploy-Environment.ps1    two-phase deployment, registration token, flip 1 misconfiguration
+  02-Test-Environment.ps1      go/no-go check, ends with Show-AvdDemoState
+  99-Remove-Environment.ps1    remove the lab
   AvdSecurityDemo.psm1         posture check, the flips and the reset
   Start-AvdDemo.ps1            presenter script: one step at a time, waits for you
 kql/
@@ -147,6 +208,10 @@ LICENSE
 
 ## Sources
 
+- [Add session hosts to a host pool: register with the agent](https://learn.microsoft.com/azure/virtual-desktop/add-session-hosts-host-pool)
+- [Trusted Launch and the Guest Attestation extension](https://learn.microsoft.com/azure/virtual-machines/trusted-launch)
+- [Sign in to a Windows VM in Azure with Microsoft Entra ID](https://learn.microsoft.com/entra/identity/devices/howto-vm-sign-in-azure-ad-windows)
+- [Send Entra ID sign-in logs to Log Analytics](https://learn.microsoft.com/entra/identity/monitoring-health/tutorial-configure-log-analytics-workspace)
 - [Set custom RDP properties on a host pool](https://learn.microsoft.com/azure/virtual-desktop/customize-rdp-properties)
 - [Configure the clipboard transfer direction](https://learn.microsoft.com/azure/virtual-desktop/clipboard-transfer-direction-data-types)
 - [Configure drive redirection](https://learn.microsoft.com/azure/virtual-desktop/redirection-configure-drives-storage)

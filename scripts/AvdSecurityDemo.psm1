@@ -11,6 +11,7 @@
 
     Quick start
         Import-Module ./AvdSecurityDemo.psm1 -Force
+        Initialize-AvdDemo     # the lab from 01-Deploy-Environment.ps1, or:
         Initialize-AvdDemo -SubscriptionId <id> -ResourceGroupName rg-avd-demo -HostPoolName hp-avd-demo
         Show-AvdDemoState
 
@@ -158,18 +159,44 @@ function Write-HostScriptResult {
 
 #region Setup --------------------------------------------------------------------------
 
+function Get-AvdDemoEnvironment {
+    <#
+    .SYNOPSIS
+        Reads scripts/demo-environment.json, written by 01-Deploy-Environment.ps1.
+        Returns nothing when the lab was not deployed with this repo.
+    #>
+    [CmdletBinding()]
+    param([string]$Path = (Join-Path $PSScriptRoot 'demo-environment.json'))
+    if (Test-Path -Path $Path) {
+        Get-Content -Path $Path -Raw | ConvertFrom-Json
+    }
+}
+
 function Initialize-AvdDemo {
     <#
     .SYNOPSIS
         Points the module at the demo host pool and saves the baseline RDP properties once.
+    .DESCRIPTION
+        Without parameters it uses the lab from scripts/demo-environment.json, written by
+        01-Deploy-Environment.ps1. Pass the three values to point it at a host pool of your own.
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][string]$SubscriptionId,
-        [Parameter(Mandatory)][string]$ResourceGroupName,
-        [Parameter(Mandatory)][string]$HostPoolName,
+        [string]$SubscriptionId,
+        [string]$ResourceGroupName,
+        [string]$HostPoolName,
         [string]$StatePath = (Join-Path $PSScriptRoot '.demo-state')
     )
+
+    $environment = Get-AvdDemoEnvironment
+    if ($environment) {
+        if (-not $SubscriptionId)    { $SubscriptionId    = $environment.subscriptionId }
+        if (-not $ResourceGroupName) { $ResourceGroupName = $environment.resourceGroups.core }
+        if (-not $HostPoolName)      { $HostPoolName      = $environment.hostPool.name }
+    }
+    if (-not ($SubscriptionId -and $ResourceGroupName -and $HostPoolName)) {
+        throw 'Pass -SubscriptionId, -ResourceGroupName and -HostPoolName, or deploy the lab with 01-Deploy-Environment.ps1 first.'
+    }
 
     $null = Set-AzContext -Subscription $SubscriptionId -ErrorAction Stop
     $hp = Get-AzWvdHostPool -Name $HostPoolName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
@@ -612,6 +639,7 @@ foreach (`$n in @($names)) { Remove-ItemProperty -Path `$k -Name `$n -ErrorActio
 #endregion
 
 Export-ModuleMember -Function @(
+    'Get-AvdDemoEnvironment'
     'Initialize-AvdDemo'
     'Show-AvdDemoState'
     'Grant-AvdDemoAdminLogin'
