@@ -57,7 +57,7 @@ param denyPublicIp bool = true
 // ----- Sessionhost ---------------------------------------------------------------------
 
 @description('VM size. Needs Gen2 and Trusted Launch support.')
-param vmSize string = 'Standard_D4ads_v5'
+param vmSize string = 'Standard_D4as_v6'
 
 @description('OS disk type.')
 param osDiskType 'Premium_LRS' | 'StandardSSD_LRS' | 'Standard_LRS' = 'Premium_LRS'

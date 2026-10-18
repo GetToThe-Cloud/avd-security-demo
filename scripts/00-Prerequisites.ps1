@@ -26,7 +26,7 @@ param(
 
     [string] $Region = 'westeurope',
 
-    [string] $VmSize = 'Standard_D4ads_v5',
+    [string] $VmSize = 'Standard_D4as_v6',
 
     [string] $ImageSku = 'win11-25h2-avd',
 

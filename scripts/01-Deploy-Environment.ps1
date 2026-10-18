@@ -46,7 +46,7 @@ param(
     [ValidatePattern('^[a-z0-9]{3,8}$')]
     [string] $Prefix = 'avdsec',
 
-    [string] $VmSize = 'Standard_D4ads_v5',
+    [string] $VmSize = 'Standard_D4as_v6',
 
     [string] $ImageSku = 'win11-25h2-avd',
 

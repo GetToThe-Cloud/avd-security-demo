@@ -45,7 +45,7 @@ cd scripts
 ./02-Test-Environment.ps1
 ```
 
-`00-Prerequisites.ps1` checks the modules and the Bicep CLI, registers the resource providers, and checks that the region, the VM size (Gen2 with Trusted Launch), the image and your vCPU quota work. With `-EnableEntraSso` it switches on Microsoft Entra authentication for RDP on the Windows Cloud Login service principal, which the host pool's `enablerdsaadauth:i:1` needs.
+`00-Prerequisites.ps1` checks the modules and the Bicep CLI, registers the resource providers, and checks that the region, the VM size (Gen2 with Trusted Launch), the image and your vCPU quota work. The SKU and quota checks can't reserve live capacity; if Azure later returns `SkuNotAvailable`, pass a compatible `-VmSize` or retry. With `-EnableEntraSso` it switches on Microsoft Entra authentication for RDP on the Windows Cloud Login service principal, which the host pool's `enablerdsaadauth:i:1` needs.
 
 `01-Deploy-Environment.ps1` deploys `main.bicep` twice. The `core` phase builds everything except the VM. The script then creates a registration token that is valid for two hours, and the `sessionhost` phase adds the VM, which joins Entra ID and installs the AVD agent and boot loader. The registration script checks that both installers carry a valid Microsoft signature before it runs them. The script waits until the host is Available, restarts it once as Microsoft's registration steps say, and then removes the registration token: it's a credential that lets any machine join the pool. Finally it gives `avd.poweruser` Virtual Machine Administrator Login, the misconfiguration flip 1 removes on stage, and writes everything to `scripts/demo-environment.json`. Count on 20 to 30 minutes.
 
@@ -144,7 +144,7 @@ The sessionhost's device object stays in Microsoft Entra ID; the script tells yo
 
 ## Cost
 
-Almost all of the cost is the sessionhost: one `Standard_D4ads_v5` with a Premium SSD OS disk while it runs. The NAT gateway and its public IP add a little per hour, and Log Analytics charges for what it ingests, which is small for one host and two users but grows if you connect a busy tenant's sign-in logs. Build the lab the day before, deallocate the VM between rehearsals if you like, and remove it after the talk.
+Almost all of the cost is the sessionhost: one `Standard_D4as_v6` with a Premium SSD OS disk while it runs. The NAT gateway and its public IP add a little per hour, and Log Analytics charges for what it ingests, which is small for one host and two users but grows if you connect a busy tenant's sign-in logs. Build the lab the day before, deallocate the VM between rehearsals if you like, and remove it after the talk.
 
 ## Things to know
 
