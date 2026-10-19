@@ -125,7 +125,7 @@ If the public IP gets created, the policy assignment hasn't taken effect yet. `T
 
 If redirection still works after the restart in step 7, something else is managing those values on the host. `Get-AvdDemoHostEnforcement` shows what is actually set, which turns the problem into the point of the slide.
 
-Log Analytics trails a few minutes behind. If today's sign-ins aren't there yet, change `ago(2h)` to `ago(1d)` in the query and show the rehearsal.
+Log Analytics trails 5 to 15 minutes behind. If today's sign-ins aren't there yet, set `Window` to `1d` at the top of the query and show the rehearsal. If the live queries return nothing at all, run `kql/lab-health.kql`: it lists which tables have reached the workspace and when, and its header says what each result means. Most AVD sign-ins are silent token refreshes, so `kql/avd-signins.kql` reads `AADNonInteractiveUserSignInLogs` as well as `SigninLogs`.
 
 ## After the demo
 
@@ -197,6 +197,7 @@ scripts/
 kql/
   avd-signins.kql              both AVD authentication moments, used live
   connections.kql              WVDConnections: user, host, client IP, transport, used live
+  lab-health.kql               what has reached the workspace; run it when the live queries are empty
   local-admin-changes.kql      the first detection to build after the demo
   new-country-signin.kql       template: AVD sign-in from a new country
   new-egress-destination.kql   template: a host reaching somewhere its siblings never did

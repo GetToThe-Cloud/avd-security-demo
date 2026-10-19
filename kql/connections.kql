@@ -1,7 +1,9 @@
 // Who connected, to which host, from where, over which transport           operations view
 // Used live in the demo (step 8). Run in the workspace that receives the host pool diagnostics.
+// No rows? Set Window to 1d and show the rehearsal. Still nothing? Run lab-health.kql.
+let Window = 2h;
 WVDConnections
-| where TimeGenerated > ago(2h)
+| where TimeGenerated > ago(Window)
 | where State == "Connected"
 | project TimeGenerated, UserName, SessionHostName, ClientOS, ClientType, ClientSideIPAddress,
           TransportType, IsClientPrivateLink, IsSessionHostPrivateLink, CorrelationId

@@ -102,7 +102,10 @@ if (-not $SkipLogCheck) {
         'Host pool diagnostics' = 'WVDAgentHealthStatus | where TimeGenerated > ago(1h) | count'
         'Connections table'     = 'WVDConnections | where TimeGenerated > ago(7d) | count'
     }
-    if ($lab.signInLogs) { $queries['Entra sign-in logs'] = 'SigninLogs | where TimeGenerated > ago(1d) | count' }
+    if ($lab.signInLogs) {
+        # Both tables: once Windows App holds a token, most AVD sign-ins are non-interactive.
+        $queries['AVD sign-ins'] = 'union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs | where TimeGenerated > ago(1d) | where ResourceIdentity in ("9cdead84-a844-4324-93f2-b2e6bb768d07", "270efc09-cd0d-444b-a71f-39af4910ec45") | count'
+    }
     foreach ($check in $queries.Keys) {
         try {
             $count = [int]((Invoke-AzOperationalInsightsQuery -WorkspaceId $lab.logAnalytics.customerId -Query $queries[$check]).Results | Select-Object -First 1).Count
@@ -112,14 +115,14 @@ if (-not $SkipLogCheck) {
         else {
             $hint = switch ($check) {
                 'Connections table' { 'no connections yet; connect once as each user before the demo' }
-                'Entra sign-in logs' { 'nothing yet; sign-in logs take a few minutes to arrive' }
+                'AVD sign-ins' { 'none in the last day; connect once as each user, sign-in logs take 5 to 15 minutes' }
                 default { 'no data yet; diagnostics can take 15 minutes after deployment' }
             }
             Add-Result -Check $check -Result 'WARN' -Detail $hint
         }
     }
     if (-not $lab.signInLogs) {
-        Add-Result -Check 'Entra sign-in logs' -Result 'WARN' -Detail 'not connected by this lab; kql/avd-signins.kql needs SigninLogs in a workspace you can query'
+        Add-Result -Check 'Entra sign-in logs' -Result 'WARN' -Detail 'not connected by this lab; kql/avd-signins.kql needs the sign-in logs in a workspace you can query'
     }
 }
 

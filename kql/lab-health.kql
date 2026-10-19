@@ -1,0 +1,19 @@
+// What has arrived in this workspace, and when last                        troubleshooting
+// Run this first when avd-signins.kql or connections.kql comes back empty.
+// One row per table that has data in the last 7 days; a table that is missing has no data.
+//   Nothing at all                       wrong workspace (check the scope above the editor) or
+//                                        no diagnostics; check the host pool's Diagnostic settings
+//   WVDAgentHealthStatus, no WVDConnections   nobody has connected yet; connect, wait 15 minutes
+//   WVDConnections, LastSeen over 2h ago      the Window in the live queries; set it to 1d
+//   No SigninLogs or AADNonInteractive...     Entra ID sign-in logs don't reach this workspace
+//   AvdRows 0 on the sign-in tables           sign-ins arrive, but none for AVD yet
+let AvdIds = dynamic(["9cdead84-a844-4324-93f2-b2e6bb768d07", "270efc09-cd0d-444b-a71f-39af4910ec45", "a4a365df-50f1-4397-bc59-1a1564b8bb9c"]);
+union withsource=Table isfuzzy=true
+    WVDAgentHealthStatus, WVDCheckpoints, WVDConnections, WVDErrors, WVDFeeds,
+    SigninLogs, AADNonInteractiveUserSignInLogs
+| where TimeGenerated > ago(7d)
+| extend IsAvd = Table startswith "WVD"
+    or column_ifexists("AppId", "") in (AvdIds) or column_ifexists("ResourceIdentity", "") in (AvdIds)
+| summarize Rows = count(), AvdRows = countif(IsAvd), LastSeen = max(TimeGenerated) by Table
+| extend Ago = strcat(tostring(datetime_diff("minute", now(), LastSeen)), " min")
+| order by Table asc
