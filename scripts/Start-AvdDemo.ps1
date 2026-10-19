@@ -244,7 +244,7 @@ $steps = @(
             'Log Analytics: run kql/avd-signins.kql'
             'Show the two rows per connection: Azure Virtual Desktop and Windows Cloud Login, with the CA result'
             'Run kql/connections.kql (WVDConnections): user, host, client IP, transport'
-            "No rows from today yet? Change ago(2h) to ago(1d) and show the rehearsal."
+            "No rows from today yet? Set Window to 1d and show the rehearsal. Still nothing: kql/lab-health.kql."
             'Close: the next detection to build is kql/local-admin-changes.kql.'
         )
         CommandText = $null

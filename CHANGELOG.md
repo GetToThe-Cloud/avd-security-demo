@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-10-19
+
+### Fixed
+
+- `kql/avd-signins.kql` and `kql/new-country-signin.kql` read only interactive sign-ins and
+  missed most AVD traffic: once Windows App holds a token, its sign-ins are non-interactive.
+  Both now also read `AADNonInteractiveUserSignInLogs`.
+- `02-Test-Environment.ps1` checks for AVD sign-ins in both tables instead of any interactive
+  sign-in.
+
+### Added
+
+- `kql/lab-health.kql`: which tables have reached the workspace and when, for when the live
+  queries come back empty.
+- A `Window` setting at the top of the live queries.
+
 ## [1.1.0] - 2026-10-17
 
 ### Added

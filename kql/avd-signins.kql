@@ -1,19 +1,28 @@
 // Sign-ins against both AVD authentication moments                     chain step 2
 // Used live in the demo (step 8). Run in Log Analytics with Entra ID sign-in logs connected.
-// Two rows per connection: Azure Virtual Desktop (feed and gateway) and Windows Cloud Login
-// (sign-in to the host). No Windows Cloud Login row means no single sign-on.
-// No rows from today yet? Change ago(2h) to ago(1d) and show the rehearsal.
+// Each connection signs in twice: Azure Virtual Desktop (feed and gateway) and Windows Cloud
+// Login (sign-in to the host). No Windows Cloud Login row means no single sign-on.
+// Reads interactive and non-interactive sign-ins: once Windows App holds a token, most AVD
+// sign-ins are silent and only land in AADNonInteractiveUserSignInLogs.
+// No rows? Set Window to 1d and show the rehearsal. Still nothing? Run lab-health.kql.
+let Window = 2h;
 let AvdApps = dynamic({
     "9cdead84-a844-4324-93f2-b2e6bb768d07": "Azure Virtual Desktop (feed and gateway)",
     "270efc09-cd0d-444b-a71f-39af4910ec45": "Windows Cloud Login (sign-in to the host)",
     "a4a365df-50f1-4397-bc59-1a1564b8bb9c": "Microsoft Remote Desktop (legacy path)"
 });
-SigninLogs
-| where TimeGenerated > ago(2h)
+union isfuzzy=true
+    (SigninLogs
+     | extend SignIn = "interactive", Location = tostring(LocationDetails), Device = tostring(DeviceDetail)),
+    (AADNonInteractiveUserSignInLogs
+     | extend SignIn = "non-interactive", Location = tostring(LocationDetails), Device = tostring(DeviceDetail))
+| where TimeGenerated > ago(Window)
 | where AppId in (bag_keys(AvdApps)) or ResourceIdentity in (bag_keys(AvdApps))
 | extend Moment = coalesce(tostring(AvdApps[ResourceIdentity]), tostring(AvdApps[AppId]))
-| project TimeGenerated, UserPrincipalName, Moment, AppDisplayName, ResourceDisplayName,
+| extend Country = tostring(parse_json(Location).countryOrRegion),
+         DeviceName = tostring(parse_json(Device).displayName),
+         DeviceCompliant = tostring(parse_json(Device).isCompliant)
+| project TimeGenerated, UserPrincipalName, Moment, SignIn, AppDisplayName, ResourceDisplayName,
           ResultType, ConditionalAccessStatus, AuthenticationRequirement,
-          Country = tostring(LocationDetails.countryOrRegion), IPAddress,
-          DeviceName = tostring(DeviceDetail.displayName), DeviceCompliant = tostring(DeviceDetail.isCompliant)
+          Country, IPAddress, DeviceName, DeviceCompliant
 | order by TimeGenerated desc
